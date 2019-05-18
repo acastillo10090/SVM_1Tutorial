@@ -1,0 +1,393 @@
+---
+title: "Support Vector Machines(SVM)"
+resource_files:
+- Project_Priscilla_Anakaren.html
+- Project_Priscilla_Anakaren_cache/html/heart dataset_16050fc47877e1f8c523968edee80308.rdx
+runtime: shiny_prerendered
+output:
+  learnr::tutorial:
+    allow_skip: yes
+    progressive: yes
+---
+
+```{r setup, include=FALSE}
+
+library(learnr)
+library(shiny)
+library(tidyverse) # loads dplyr, ggplot2, and others
+library(caret) #classification and regression Training
+library(ggplot2)
+library(lattice)
+library(kernlab)
+library(devtools)
+library(readr)
+library(here)
+tutorial_options(exercise.timelimit = 60)
+knitr::opts_chunk$set(error = TRUE)
+
+
+
+```
+
+## Introduction
+
+This tutorial will introduce you to Support Vector Machines (SVM). SVM's represent a powerfull Supervised Learning technique for general classification, regression and outlier detection. Basically, this method classifies data into one of two categories using an optimal linear seperator. A few applications include facial recognition, text categorization, classification of images, and Bioinformatics.
+
+
+### Is this tutorial for you?
+
+Do you need to work through the tutorial? Take the quiz below to find out.
+
+
+```{r quiz1, echo = FALSE}
+question("Check all that are true. I have not:",
+  answer("learned about Support Vector Classifiers", message = "* 1. SVM Classifier"),
+  answer("learned about Support Vector Machines", message = "* Theory"),
+  answer("learned about Non-Linear Kernels", message = "* 4. SVM using Non-Linear Kernal"),
+  answer("None of the above. I've done them all.", correct = TRUE, message = "You can skip this tutorial!"),
+  type = "multiple",
+  incorrect = "This tutorial is here to help! To get set up read:"
+)
+```
+
+### Outline
+* Introduction
+* Data Description
+* Part 1: SVM Classifier
+* Part 2: Prediction and Confusion Matrix
+* Part 3: Tuning Parameter C
+* Part 4: SVM using Non-Linear Kernel
+* References
+
+### Linearly Seperable Case
+If data is said to be linearly seperable by an infinite number of hyperplanes, then the goal is to identify the optimal serperating hyperplane (also known as the Maximum Margin Hyperplane). The MMH is calculated using linear combination of distance to support vectors .The MMH should be as far as possible to the support vector of any class therefore the margin needs to be maximized. Intuitively, the goal is to maximize the probability of classifying correctly unseen instances and minimizing the expected generalization loss. If a particular training observation is not a support vector, then its $\alpha_{i}$ equals zero. Only Support vector is important whereas other training examples are ignorable.
+
+Parameters:
+
+  $C$
+
+  * Non-negative tuning parameter that is usually chosen by cross validation. 
+  * Controls the bias variance trade off between error and margin. 
+  * Bounds the sum of the Slack variables and so it determines the number and severity of the violations to the margin and the hyperplane that it will tolerate.
+  * As C increases, more tolerant of violations to the margin, therefore margin widens.
+  
+  $\epsilon_i$
+  
+
+  * Slack variables are individual observations that are on the wrong side of the margin or hyperplane.
+  * Approximates the number of misclassifiations. 
+  * Deviation of the examples from the margin. 
+  * Equals 0 if there are no errors (linearly seperable). 
+
+  $Maximize$ $M$
+\[\beta_0,\beta_1,...,\beta_p, \epsilon_1...\epsilon_n, M\]
+
+\[subject \sum_{j=1}^{p}\beta_j^2 = 1, \]
+
+
+ \[ y_i = (\beta_0+\beta_1x_{i1}+\beta_2x_{i2}+...+\beta_px_{ip})\geq M(1-\epsilon_i),\]
+ 
+ \[\epsilon_i \geq 0, \sum_{i=1}^{n} \epsilon_i \leq C,
+ \]
+ 
+ where $C$ is a nonnegative tuning parameter
+
+### Non-Linear Seperable Case
+
+When the support vector classifier is combined with a nonlinear kernal the result classifer is a SVM. In order to have better preformance we have to be able to obtain non-linear boundaries. For example using a polynomial kernal allows the use of a flexible decision boundary. 
+
+
+$K$ 
+
+* Some function that will be a Kernal, quantifies the similarity of two observations
+
+* Non-linear kernal
+
+
+\[ f(x)= \beta_0 + \sum_{i \in S} \alpha_i K(x,x_i) \]
+
+* Kernal inner product
+
+\[K(x_i,x_i')= \sum_{j=1}^{p} x_{ij} x_{i'j} \]
+ 
+ * Polynomial kernal
+
+\[K(x_i,x_i')= (1 + \sum_{j=1}^{p} x_{ij} x_{i'j})^d \]
+
+ 
+ 
+### Advantages of SVM's
+* Algorithms can get a bit complex
+* Kernals allow flexibility 
+* Many applications
+
+
+
+
+
+
+## Data Description
+
+### Setup
+
+We will use the `Heart` data set found online, which you can find at [An Introduction to Statistical Computing](http://www-bcf.usc.edu/~gareth/ISL/data.html). This dataset contains of 13 predictors and a dummy response variable AHD. Among the 13 predictors, Age, Sex and Cholesterol are studied. In this tutorial we will be using Support Vector Machines in order to classify whether a person is prone to Atherosclerotic heart disease, which indicates the prescence of heart disease based on an angiographic test. 
+
+
+### Read in Dataset
+
+**Note**: Remember to check for missing values.
+```{r heart dataset, message=FALSE}
+#Read in data
+heart = read.csv(here("static","data","Heart.csv"))
+```
+
+```{r heart,echo=FALSE}
+heart <- heart[,-1]
+# Check for missing values
+
+anyNA(heart)
+
+# 6 rows contain missing values
+heart[!complete.cases(heart),]
+
+# Let's remove these
+heart <- na.omit(heart)
+
+# assign 0 for No and 1 for Yes to predictor
+heart$AHD = as.factor(ifelse(heart$AHD == "Yes", 1, 0))
+```
+
+### Output after recoding response variable AHD by replacing Yes and No, as 1 and 0 respectively:
+
+```{r,echo=FALSE}
+knitr::kable(head(heart))
+```
+
+### Split data set
+
+Here we will be splitting the data into a training set and a testing set. We will use the training set for our model building and the testing set for evaluating the model:
+
+```{r training, eval=heart}
+set.seed(3033)
+trainset <- createDataPartition(y = heart$AHD, p= 0.7, list = FALSE)
+training <- heart[trainset,]
+testing <- heart[-trainset,]
+```
+
+
+## 1. SVM Classifier
+
+### Train Control Function
+The `train`  function from the `caret` package trains the data for various algorithms. However, before we use the train function we first need to use `trainControl` method which controls the computational nuances of the train function.
+
+Notice we are setting 3 parameters. The first is the resampling **method**. We will use repeated cross validation ("repeatedcv"). The second is the **number** of resampling iterations and the third is the number of complete sets of folds to compute for **repeated** cross validation. Lets use 10 and 5 respectively.
+
+Below specify repeated cross validation as the sampling method and the number of resampling iterations and number of repeats as 10 and 5 respectively:
+
+
+```{r train control, exercise=TRUE}
+trainctrl = trainControl(method = "", number = , repeats = )
+```
+
+```{r train control-solution}
+trainctrl = trainControl(method = "repeatedcv", number = 10, repeats = 5)
+```
+
+
+**Note that this won't produce any results.**
+
+### SVM Linear
+
+Now that we have used the `trainControl` method we can use the **train method** to train the SVM classifier
+
+The **method** parameter specifies which classification model to use. Let's use a linear one ("svmLinear"). This means that the decision boundary between the two classes will be linear. We will build a model using a non-linear kernel later on.
+
+In order to get the best accuracy we need to pre-process our data. The **preProcess** parameter allows us to do this by centering and scaling the data. Here we use both center and scale to standardize our data to have a mean of approximately 0 and sd 1. Lastly, the **tuneLength** parameter is for tuning our algorithm. Let's use a value of 10.
+
+Input the **method** and **tuneLength** parameter then check the results stored in the svm_linear variable:
+
+
+```{r prepare-train}
+trainctrl = trainControl(method = "repeatedcv", number = 10, repeats = 5)
+set.seed(1234)
+```
+
+
+```{r train, exercise=TRUE, exercise.setup = "prepare-train"}
+svm_linear = train(AHD ~., data = training, method = "",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneLength = )
+```
+
+
+```{r train-solution}
+svm_linear = train(AHD ~., data = training, method = "svmLinear",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneLength = 10)
+
+svm_linear
+```
+
+From the results we can see that a Linear Kernel was used and that the tuning parameter C was held at a value of 1. We will explore the impact of these two parameters later on.
+
+
+## 2. Prediction and Confusion Matrix
+
+Now we can use the `predict` function with the trained SVM model to make predictions using the test set. The `predict` function takes two arguments. The first one is the trained model and the second one takes the testing data frame. This will return a list.
+
+We will store the results in the test_predict variable.
+
+Once we store our results, we can create a `confusion matrix` in order to check the accuracy of our model
+
+```{r prepare-trainedmodel}
+trainctrl = trainControl(method = "repeatedcv", number = 10, repeats = 5)
+set.seed(1234)
+svm_linear = train(AHD ~., data = training, method = "svmLinear",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneLength = 10)
+```
+
+
+```{r pred and confusion matrix, echo=TRUE}
+test_predict = predict(svm_linear, newdata = testing)
+confusionMatrix(test_predict, testing$AHD)
+```
+
+### Confusion Matrix Quiz
+
+```{r confusion matrix quiz, echo=FALSE}
+quiz(
+  question("Based on the output what is the model accuracy for the test set?",
+	answer("83.33%"),
+	answer("82.02%", correct = TRUE),
+	answer("1"),
+	answer("80.49%")
+  )
+)
+```
+
+
+
+## 3. Tuning Parameter C
+
+Now let’s explore the impact of tuning parameter **C**.
+
+We can think of **C** as a budget for the amount that the margin can be violated by the n observations. When **C** is small, we seek narrow margins that are rarely violated; this amounts to a classifier that is highly fit to the data, which may have low bias but high variance. On the other hand, when **C** is larger,the margin is wider and we allow more violations to it; this amounts to fitting the data less hard and obtaining a classifier that is potentially more biased but may have lower variance.
+
+In this exercise we will perform cross validation in order to select our **C** parameter. The following code snippet inputs some arbitrary values of **C** using `expand.grid()` into "grid" data frame. It then uses this dataframe for testing the classifier at specific **C** values.
+
+To complete the exercise below input the values 0.01, 0.05, 0.1, 0.25, 0.5, 1, 1.25, 1.5, 1.75, 5 inside **c()**.
+
+```{r prepare-tune C}
+grid = expand.grid(C = c(0.01, 0.05, 0.1, 0.25, 0.5, 1, 1.25, 1.5, 1.75, 5))
+set.seed(1234)
+svm_linear_grid = train(AHD ~., data = training, method = "svmLinear",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneGrid = grid,  tuneLength = 10)
+```
+
+```{r cross parameter C, exercise = TRUE, exercise.setup = "prepare-tune"}
+grid = expand.grid(C = c())
+set.seed(1234)
+svm_linear_grid = train(AHD ~., data = training, method = "svmLinear",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneGrid = grid,  tuneLength = 10)
+
+svm_linear_grid
+```
+
+Here we produce a plot that shows at what value of **C** our svm classifier is giving best accuracy
+
+
+```{r plot, echo=TRUE}
+plot(svm_linear_grid)
+```
+
+```{r cross parameter quiz, echo=FALSE}
+quiz(
+  question("Looking at the results and the plot, at what value of parameter C is our classifier giving the best accuracy?",
+	answer(".05"),
+	answer("1.50"),
+	answer(".01", correct = TRUE),
+	answer("1.00")
+  )
+)
+```
+
+Notice from the output below that the number of support vectors has increased from 74 to 117. Now that a smaller value of the cost parameter is being used (**C** = .01 as opposed to **C** = 1), we obtain a larger number of support vectors, because the margin is now wider
+
+```{r support vectors}
+svm_linear$finalModel
+svm_linear_grid$finalModel
+```
+
+Let’s check the accuracy of our model again, but this time with a cross parameter value of .01
+
+```{r new_model, echo=TRUE}
+test_pred_grid = predict(svm_linear_grid, newdata = testing)
+confusionMatrix(test_pred_grid, testing$AHD)
+```
+
+Looking at the results we can see that the accuracy has increased from 82.02% to 84.27%.
+
+
+
+
+
+
+
+
+## 4. SVM using Non-Linear Kernel
+
+Now that we have explored the impact of tuning parameter **C** on our SV classifier, let's build a model using a non-linear Kernel. For this exercise we will use the Radial Basis Function (**svmRadial**).
+
+Input the method in the code chunk below:
+
+```{r non linear kernel, exercise=TRUE}
+set.seed(1234)
+svm_radial = train(AHD ~., data = training, method = ,  trControl=trainctrl, preProcess = c("center", "scale"),  tuneLength = 10)
+```
+
+```{r non linear kernel-solution}
+set.seed(1234)
+svm_radial = train(AHD ~., data = training, method = "svmRadial",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneLength = 10)
+```
+
+The code below tunes our classifier with different values of **C** and sigma. We will be using grid search again to do so. Note that since we are using a radial kernel we need to specify sigma as well.
+
+```{r nonlinear tune, echo=TRUE}
+grid_radial <- expand.grid(sigma = c(.01, 0.05, 0.1, 0.25, 0.5),  C = c(0.01, 0.05, 0.1, 0.5, 1))
+
+set.seed(1234)
+svm_radial_grid <- train(AHD ~., data = training, method = "svmRadial",  trControl=trainctrl,  preProcess = c("center", "scale"),  tuneGrid = grid_radial,  tuneLength = 10)
+
+svm_radial_grid
+plot(svm_radial_grid)
+```
+
+We can see that the best values selected for **C** and sigma were .5 and .01 respectively
+
+Lastly, let's check the accuracy of our model by creating a `confusion matrix` like we did with the linear svm classifier.
+```{r prepare-nonlinear cm}
+test_pred_radial = predict(svm_radial_grid, newdata = testing)
+confusionMatrix(test_pred_radial, testing$AHD)
+```
+
+```{r nonlinear accuracy, exercise=TRUE, exercise.setup = "prepare-nonlinear cm"}
+# Place code here
+
+```
+
+```{r nonlinear accuracy-solution}
+test_pred_radial = predict(svm_radial_grid, newdata = testing)
+confusionMatrix(test_pred_radial, testing$AHD)
+```
+
+```{r cm results quiz, cache=FALSE, echo=FALSE}
+quiz(
+  question("Based on the results from the confusion matrix did the model's accuracy increased or decreased in comparison with the linear SVM classifier with tuning parameter C = .01?",
+	answer("Increased"),
+	answer("Decreased", correct = TRUE)
+  )
+)
+```
+
+
+
+
+
+## References
+
+
+* Gareth, James, et al. An Introduction to Statistical Learning: with Application in R pg.337-368. Springer Texts in Statistics [An Introduction to Statistical Computing](http://www-bcf.usc.edu/~gareth/ISL/)
+  
